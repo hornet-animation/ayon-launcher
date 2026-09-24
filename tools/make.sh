@@ -403,9 +403,13 @@ docker_build() {
 
   local version_command="import os;exec(open(os.path.join('$repo_root', 'version.py')).read());print(__version__);"
   local launcher_version="$(uv run python <<< ${version_command})"
+  # Hornet fix: Docker tags don't allow '+', which PEP 440 local version
+  # identifiers (e.g. "1.6.3+hornet.1") use. Sanitize for the tag only;
+  # the real version string is still passed through via --build-arg VERSION.
+  local docker_tag_version="${launcher_version//+/-}"
 
   echo -e "${BIGreen}>>>${RST} Running docker build ..."
-  docker build --pull --iidfile ${outdir}/docker-image.id --build-arg CUSTOM_QT_BINDING=$qtenv --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg VERSION=$launcher_version -t ynput/ayon-launcher-$variant:$launcher_version -f $dockerfile .
+  docker build --pull --iidfile ${outdir}/docker-image.id --build-arg CUSTOM_QT_BINDING=$qtenv --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg VERSION=$launcher_version -t ynput/ayon-launcher-$variant:$docker_tag_version -f $dockerfile .
   if [ $? -ne 0 ] ; then
     echo $?
     echo -e "${BIRed}!!!${RST} Docker build failed."
