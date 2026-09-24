@@ -363,6 +363,32 @@ from ayon_api.constants import (  # noqa E402
     DEFAULT_VARIANT_ENV_KEY,
     SITE_ID_ENV_KEY,
 )
+
+# --- Hornet fix: always send 'variant' on /settings requests ---
+# Upstream bug: both ayon_common.distribution.control._get_project_bundle()
+# and start.py's own _run_disk_mapping() build raw "settings?..." requests
+# without a 'variant' param. The server silently defaults variant to
+# "production" even during staging launches, breaking frozen-staging
+# projects with an unhandled KeyError('addons').
+# Upstream reports: ynput/ayon-launcher#123, ynput/ayon-backend#758
+_hornet_original_server_get = ayon_api.ServerAPI.get
+
+
+def _hornet_patched_server_get(self, entrypoint, **kwargs):
+    if (
+        (entrypoint == "settings" or entrypoint.startswith("settings?"))
+        and "variant" not in kwargs
+        and "variant=" not in entrypoint
+    ):
+        default_variant = self.get_default_settings_variant()
+        if default_variant:
+            kwargs["variant"] = default_variant
+    return _hornet_original_server_get(self, entrypoint, **kwargs)
+
+
+ayon_api.ServerAPI.get = _hornet_patched_server_get
+# --- end Hornet fix ---
+
 from ayon_common import is_staging_enabled, is_dev_mode_enabled  # noqa E402
 from ayon_common.connection.credentials import (  # noqa E402
     ask_to_login_ui,
